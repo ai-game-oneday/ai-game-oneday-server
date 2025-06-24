@@ -1,3 +1,13 @@
+프로젝트 번호
+184076423897
+프로젝트 ID
+ai-demo-oneday-api
+기본 리전: asia-northeast3
+
+service url:
+https://ai-demo-oneday-api-184076423897.asia-northeast3.run.app
+
+
 TODO
 
 1. 백그라운드 선명하게 모델 바꾸기

@@ -12,12 +12,12 @@ PROJECT_ROOT: Path = BASE_DIR  # repository root
 # ---------------------------------------------------------------------------
 # .env.local 로부터 환경변수 로드
 # ---------------------------------------------------------------------------
-ENV_PATH = PROJECT_ROOT / ".env.local"
+ENV_PATH = PROJECT_ROOT / ".env"
 if ENV_PATH.exists():
     load_dotenv(ENV_PATH)
+    print("[config] Loaded .env for local development")
 else:
-    # 개발 초기엔 .env.local 이 없을 수도 있으므로 경고만 출력
-    print("[config] .env.local not found – falling back to os environment only.")
+    print("[config] .env not found – using system environment (production mode)")
 
 # ---------------------------------------------------------------------------
 # 필수 환경변수
@@ -25,26 +25,28 @@ else:
 GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
     raise RuntimeError(
-        "[config] GOOGLE_API_KEY is missing. Add it to .env.local or system env."
+        "[config] GOOGLE_API_KEY is missing. Add it to .env or system env."
     )
 
 RD_TOKEN: str | None = os.getenv("RD_TOKEN")
-if not GOOGLE_API_KEY:
-    raise RuntimeError(
-        "[config] RD_TOKEN is missing. Add it to .env.local or system env."
-    )
+if not RD_TOKEN:
+    raise RuntimeError("[config] RD_TOKEN is missing. Add it to .env or system env.")
 
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 if not API_SECRET_KEY:
     raise RuntimeError(
-        "[config] API_SECRET_KEY is missing. Add it to .env.local or system env."
+        "[config] API_SECRET_KEY is missing. Add it to .env or system env."
     )
 
 # ---------------------------------------------------------------------------
-# Hugging Face 캐시 경로 (선택)
+# Hugging Face 캐시 경로 (Cloud Run 대응)
 # ---------------------------------------------------------------------------
-HF_HOME: str = os.getenv("HF_HOME", "E:/Huggingface_Cache")
-os.environ["HF_HOME"] = HF_HOME  # 하위 라이브러리에서 즉시 인식하도록 보장
+# Cloud Run에서는 /tmp만 쓸 수 있음
+if os.getenv("PORT"):  # Cloud Run 환경 감지
+    HF_HOME: str = "/tmp/huggingface_cache"
+else:
+    HF_HOME: str = os.getenv("HF_HOME", "E:/Huggingface_Cache")
+os.environ["HF_HOME"] = HF_HOME
 
 # ---------------------------------------------------------------------------
 # Instruction 파일 경로
