@@ -1,14 +1,22 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 import uvicorn
 import json
+import logging
+import time
+from starlette.responses import Response
 import llm
 from remove_background import remove_background
 import config
 
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("fastapi_app")
 
 app = FastAPI()
 timeout = httpx.Timeout(120.0)
@@ -60,6 +68,62 @@ class ReactionResponse(BaseModel):
 
 
 @app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """요청과 응답을 로깅하는 미들웨어"""
+    start_time = time.time()
+
+    # 요청 정보 로깅
+    logger.info(f"=== Incoming Request ===")
+    logger.info(f"Method: {request.method}")
+    logger.info(f"URL: {str(request.url)}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    logger.info(f"Client IP: {request.client.host}")
+
+    # 요청 Body 로깅 (POST 요청인 경우)
+    if request.method in ["POST", "PUT", "PATCH"]:
+        try:
+            # body를 읽기 위해 복사본 생성
+            body = await request.body()
+            if body:
+                try:
+                    # JSON으로 파싱 시도
+                    body_json = json.loads(body.decode("utf-8"))
+                    logger.info(
+                        f"Request Body (JSON): {json.dumps(body_json, indent=2, ensure_ascii=False)}"
+                    )
+                except json.JSONDecodeError:
+                    # JSON이 아닌 경우 텍스트로 로깅
+                    logger.info(
+                        f"Request Body (Raw): {body.decode('utf-8')[:1000]}..."
+                    )  # 첫 1000자만
+            else:
+                logger.info("Request Body: Empty")
+
+            # body를 다시 읽을 수 있도록 request 객체 수정
+            async def receive():
+                return {"type": "http.request", "body": body}
+
+            request._receive = receive
+
+        except Exception as e:
+            logger.error(f"Error reading request body: {e}")
+
+    # 실제 요청 처리
+    response = await call_next(request)
+
+    # 응답 시간 계산
+    process_time = time.time() - start_time
+
+    # 응답 정보 로깅
+    logger.info(f"=== Response ===")
+    logger.info(f"Status Code: {response.status_code}")
+    logger.info(f"Response Headers: {dict(response.headers)}")
+    logger.info(f"Process Time: {process_time:.4f} seconds")
+
+    return response
+
+
+@app.middleware("http")
 async def add_security_headers(request, call_next):
     """보안 헤더 추가"""
     response = await call_next(request)
@@ -74,6 +138,7 @@ async def generate_image(request: ImageRequest, _: str = Depends(verify_api_key)
     """
     사용자가 보낸 prompt로 이미지를 생성하는 엔드포인트
     """
+    logger.info(f"Starting image generation: {request.prompt}")
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
@@ -124,6 +189,7 @@ async def generate_fish(request: ImageRequest, _: str = Depends(verify_api_key))
     """
     사용자가 보낸 prompt로 물고기 이미지를 생성하는 엔드포인트
     """
+    logger.info(f"Starting fish generation: {request.prompt}")
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
@@ -180,6 +246,7 @@ async def generate_human(request: ImageRequest, _: str = Depends(verify_api_key)
     """
     사용자가 보낸 prompt로 인간 이미지를 생성하는 엔드포인트
     """
+    logger.info(f"Starting human generation: {request.prompt}")
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
@@ -233,6 +300,7 @@ async def generate_boat(request: ImageRequest, _: str = Depends(verify_api_key))
     """
     사용자가 보낸 prompt로 보트 이미지를 생성하는 엔드포인트
     """
+    logger.info(f"Starting boat generation: {request.prompt}")
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
@@ -285,6 +353,7 @@ async def generate_background(request: ImageRequest, _: str = Depends(verify_api
     """
     사용자가 보낸 prompt로 배경 이미지를 생성하는 엔드포인트
     """
+    logger.info(f"Starting background generation: {request.prompt}")
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
