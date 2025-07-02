@@ -105,4 +105,4 @@ You are an expert at generating short, vivid reactions for various characters in
 - Maintain each character's unique traits and speech patterns
 - Emphasize game fun and character individuality
 
-Please generate an appropriate short reaction for the given character based on the following input:
+Please generate an appropriate short reaction in English for the given character based on the following input:
