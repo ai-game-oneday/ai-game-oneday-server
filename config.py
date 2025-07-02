@@ -45,7 +45,7 @@ if not API_SECRET_KEY:
 if os.getenv("PORT"):  # Cloud Run 환경 감지
     HF_HOME: str = "/tmp/huggingface_cache"
 else:
-    HF_HOME: str = os.getenv("HF_HOME", "E:/Huggingface_Cache")
+    HF_HOME: str = os.getenv("HF_HOME", "D:/Huggingface_Cache")
 os.environ["HF_HOME"] = HF_HOME
 
 # ---------------------------------------------------------------------------
