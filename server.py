@@ -22,6 +22,9 @@ app = FastAPI()
 timeout = httpx.Timeout(120.0)
 security = HTTPBearer()
 
+# ImaginalDiffusion API URL (RunPod)
+im_url = "https://y4gifuyteybnrk-3000.proxy.runpod.net/generate"
+
 # CORS 설정 (Unity 클라이언트용)
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +36,7 @@ app.add_middleware(
 
 
 def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """API 키 검증"""
+    """외부 클라이언트 API 키 검증"""
     if credentials.credentials != config.API_SECRET_KEY:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
@@ -46,8 +49,7 @@ class ImageRequest(BaseModel):
     prompt: str
     width: int = 64
     height: int = 64
-    num_images: int = 1
-    prompt_style: str = "rd_plus__retro"
+    remove_bg: bool = True
 
 
 # 응답 데이터 모델
@@ -65,6 +67,42 @@ class ReactionRequest(BaseModel):
 
 class ReactionResponse(BaseModel):
     reaction: str
+
+
+async def call_imaginaldiffusion_api(payload: dict) -> str:
+    """
+    ImaginalDiffusion API 호출 공통 함수
+    """
+    headers = {
+        "Authorization": f"Bearer {config.IM_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            logger.info(f"ImaginalDiffusion API 호출: {payload['prompt']}")
+            response = await client.post(im_url, headers=headers, json=payload)
+            response.raise_for_status()
+
+            # JSON 응답 파싱
+            response_data = response.json()
+            logger.info(f"ImaginalDiffusion 응답 성공: {response.status_code}")
+
+            # base64_image 필드에서 이미지 추출
+            if "base64_image" not in response_data:
+                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
+
+            return response_data["base64_image"]
+
+    except httpx.RequestError as e:
+        logger.error(f"ImaginalDiffusion API 호출 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON 파싱 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
+    except KeyError as e:
+        logger.error(f"응답 형식 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
 
 
 @app.middleware("http")
@@ -135,123 +173,48 @@ async def add_security_headers(request, call_next):
 
 @app.post("/generate-image", response_model=ImageResponse)
 async def generate_image(request: ImageRequest, _: str = Depends(verify_api_key)):
-    """
-    사용자가 보낸 prompt로 이미지를 생성하는 엔드포인트
-    """
+    """사용자가 보낸 prompt로 이미지를 생성하는 엔드포인트"""
     logger.info(f"Starting image generation: {request.prompt}")
-    url = "https://api.retrodiffusion.ai/v1/inferences"
-
-    headers = {
-        "X-RD-Token": config.RD_TOKEN,
-    }
 
     enhanced_prompt = llm.enhance_prompt(request.prompt) + ", full body, full shape"
 
     payload = {
+        "prompt": enhanced_prompt,
         "width": request.width,
         "height": request.height,
-        "prompt": enhanced_prompt,
-        "num_images": request.num_images,
-        "prompt_style": request.prompt_style,
-        # "remove_bg": True,
+        "remove_bg": True,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # HTTP 에러가 있으면 예외 발생
+    base64_image = await call_imaginaldiffusion_api(payload)
+    nobg_image = remove_background(base64_image)
 
-            # JSON 응답 파싱
-            response_data = response.json()
-
-            # base64_images에서 첫 번째 이미지 추출
-            if (
-                "base64_images" not in response_data
-                or not response_data["base64_images"]
-            ):
-                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
-
-            first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
-
-            return ImageResponse(base64_image=nobg_image)
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
-    except KeyError as e:
-        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
+    return ImageResponse(base64_image=nobg_image)
 
 
 @app.post("/generate-fish", response_model=ImageResponse)
 async def generate_fish(request: ImageRequest, _: str = Depends(verify_api_key)):
-    """
-    사용자가 보낸 prompt로 물고기 이미지를 생성하는 엔드포인트
-    """
+    """사용자가 보낸 prompt로 물고기 이미지를 생성하는 엔드포인트"""
     logger.info(f"Starting fish generation: {request.prompt}")
-    url = "https://api.retrodiffusion.ai/v1/inferences"
-
-    headers = {
-        "X-RD-Token": config.RD_TOKEN,
-    }
 
     enhanced_prompt = llm.enhance_prompt(request.prompt) + ", full body"
 
     payload = {
+        "prompt": enhanced_prompt,
         "width": request.width,
         "height": request.height,
-        "prompt": enhanced_prompt,
-        "num_images": request.num_images,
-        "prompt_style": request.prompt_style,
-        # "remove_bg": True,
+        "remove_bg": True,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # HTTP 에러가 있으면 예외 발생
+    base64_image = await call_imaginaldiffusion_api(payload)
+    nobg_image = remove_background(base64_image)
 
-            # JSON 응답 파싱
-            response_data = response.json()
-
-            # base64_images에서 첫 번째 이미지 추출
-            if (
-                "base64_images" not in response_data
-                or not response_data["base64_images"]
-            ):
-                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
-
-            first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
-
-            return ImageResponse(base64_image=nobg_image)
-
-    except httpx.RequestError as e:
-        print(f"Unexpected HTTPX error: {e}")
-        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
-    except json.JSONDecodeError as e:
-        print(f"Unexpected JSON error: {e}")
-        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
-    except KeyError as e:
-        print(f"Unexpected Key error: {e}")
-        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail=f"예상치 못한 오류: {str(e)}")
+    return ImageResponse(base64_image=nobg_image)
 
 
 @app.post("/generate-human", response_model=ImageResponse)
 async def generate_human(request: ImageRequest, _: str = Depends(verify_api_key)):
-    """
-    사용자가 보낸 prompt로 인간 이미지를 생성하는 엔드포인트
-    """
+    """사용자가 보낸 prompt로 인간 이미지를 생성하는 엔드포인트"""
     logger.info(f"Starting human generation: {request.prompt}")
-    url = "https://api.retrodiffusion.ai/v1/inferences"
-
-    headers = {
-        "X-RD-Token": config.RD_TOKEN,
-    }
 
     enhanced_prompt = (
         llm.enhance_prompt(request.prompt)
@@ -259,142 +222,57 @@ async def generate_human(request: ImageRequest, _: str = Depends(verify_api_key)
     )
 
     payload = {
+        "prompt": enhanced_prompt,
         "width": 64,
         "height": 128,
-        "prompt": enhanced_prompt,
-        "num_images": request.num_images,
-        "prompt_style": "rd_fast__game_asset",
-        # "remove_bg": True,
+        "remove_bg": True,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # HTTP 에러가 있으면 예외 발생
+    base64_image = await call_imaginaldiffusion_api(payload)
+    nobg_image = remove_background(base64_image)
 
-            # JSON 응답 파싱
-            response_data = response.json()
-
-            # base64_images에서 첫 번째 이미지 추출
-            if (
-                "base64_images" not in response_data
-                or not response_data["base64_images"]
-            ):
-                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
-
-            first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
-
-            return ImageResponse(base64_image=nobg_image)
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
-    except KeyError as e:
-        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
+    return ImageResponse(base64_image=nobg_image)
 
 
 @app.post("/generate-boat", response_model=ImageResponse)
 async def generate_boat(request: ImageRequest, _: str = Depends(verify_api_key)):
-    """
-    사용자가 보낸 prompt로 보트 이미지를 생성하는 엔드포인트
-    """
+    """사용자가 보낸 prompt로 보트 이미지를 생성하는 엔드포인트"""
     logger.info(f"Starting boat generation: {request.prompt}")
-    url = "https://api.retrodiffusion.ai/v1/inferences"
-
-    headers = {
-        "X-RD-Token": config.RD_TOKEN,
-    }
 
     enhanced_prompt = (
         llm.enhance_prompt(request.prompt) + ", 2D platformer style side view"
     )
 
     payload = {
+        "prompt": enhanced_prompt,
         "width": 128 + 64,
         "height": 64 + 32,
-        "prompt": enhanced_prompt,
-        "num_images": request.num_images,
-        "prompt_style": "rd_fast__game_asset",
-        # "remove_bg": True,
+        "remove_bg": True,
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # HTTP 에러가 있으면 예외 발생
+    base64_image = await call_imaginaldiffusion_api(payload)
+    nobg_image = remove_background(base64_image)
 
-            # JSON 응답 파싱
-            response_data = response.json()
-
-            # base64_images에서 첫 번째 이미지 추출
-            if (
-                "base64_images" not in response_data
-                or not response_data["base64_images"]
-            ):
-                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
-
-            first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
-
-            return ImageResponse(base64_image=nobg_image)
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
-    except KeyError as e:
-        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
+    return ImageResponse(base64_image=nobg_image)
 
 
 @app.post("/generate-background", response_model=ImageResponse)
 async def generate_background(request: ImageRequest, _: str = Depends(verify_api_key)):
-    """
-    사용자가 보낸 prompt로 배경 이미지를 생성하는 엔드포인트
-    """
+    """사용자가 보낸 prompt로 배경 이미지를 생성하는 엔드포인트"""
     logger.info(f"Starting background generation: {request.prompt}")
-    url = "https://api.retrodiffusion.ai/v1/inferences"
-
-    headers = {
-        "X-RD-Token": config.RD_TOKEN,
-    }
 
     enhanced_prompt = llm.enhance_prompt(request.prompt)
 
     payload = {
+        "prompt": enhanced_prompt,
         "width": 320,
         "height": 180,
-        "prompt": enhanced_prompt,
-        "num_images": request.num_images,
-        "prompt_style": request.prompt_style,
+        "remove_bg": False,  # 배경은 배경 제거 안 함
     }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # HTTP 에러가 있으면 예외 발생
+    base64_image = await call_imaginaldiffusion_api(payload)
 
-            # JSON 응답 파싱
-            response_data = response.json()
-
-            # base64_images에서 첫 번째 이미지 추출
-            if (
-                "base64_images" not in response_data
-                or not response_data["base64_images"]
-            ):
-                raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
-
-            first_image = response_data["base64_images"][0]
-
-            return ImageResponse(base64_image=first_image)
-
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"JSON 파싱 실패: {str(e)}")
-    except KeyError as e:
-        raise HTTPException(status_code=500, detail=f"응답 형식 오류: {str(e)}")
+    return ImageResponse(base64_image=base64_image)
 
 
 @app.post("/generate-reaction", response_model=ReactionResponse)
@@ -408,10 +286,12 @@ async def generate_reaction(request: ReactionRequest, _: str = Depends(verify_ap
 
 @app.get("/")
 async def root():
-    """
-    기본 엔드포인트 - 서버 상태 확인
-    """
-    return {"message": "이미지 생성 API 서버가 실행 중입니다"}
+    """기본 엔드포인트 - 서버 상태 확인"""
+    return {
+        "message": "이미지 생성 API 서버가 실행 중입니다",
+        "imaginaldiffusion_url": im_url,
+        "status": "healthy",
+    }
 
 
 if __name__ == "__main__":
@@ -421,6 +301,7 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
 
     print(f"Starting server on port {port}")
+    print(f"ImaginalDiffusion URL: {im_url}")
     print(
         f"Environment: {'Production (Cloud Run)' if os.getenv('PORT') else 'Development'}"
     )

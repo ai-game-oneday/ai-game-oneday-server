@@ -28,9 +28,9 @@ if not GOOGLE_API_KEY:
         "[config] GOOGLE_API_KEY is missing. Add it to .env or system env."
     )
 
-RD_TOKEN: str | None = os.getenv("RD_TOKEN")
-if not RD_TOKEN:
-    raise RuntimeError("[config] RD_TOKEN is missing. Add it to .env or system env.")
+IM_TOKEN = os.getenv("IM_TOKEN")
+if not IM_TOKEN:
+    raise RuntimeError("[config] IM_TOKEN is missing. Add it to .env or system env.")
 
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 if not API_SECRET_KEY:
