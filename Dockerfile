@@ -23,10 +23,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 포트 설정
-EXPOSE 8080
+EXPOSE 8081
 
 # 환경변수 설정
-ENV PORT=8080
+ENV PORT=8081
 ENV PYTHONPATH=/app
 
 # 서버 실행 (수정된 부분)
