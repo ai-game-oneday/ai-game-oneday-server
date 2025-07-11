@@ -200,7 +200,7 @@ async def generate_fish(request: ImageRequest, _: str = Depends(verify_api_key))
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
-        "X-RD-Token": "rdpk-c9c6911ae1e01e3a986e25209740aa50",
+        "X-RD-Token": config.RD_TOKEN,
     }
 
     enhanced_prompt = llm.enhance_prompt(request.prompt) + ", full body"
@@ -257,7 +257,7 @@ async def generate_human(request: ImageRequest, _: str = Depends(verify_api_key)
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
-        "X-RD-Token": "rdpk-c9c6911ae1e01e3a986e25209740aa50",
+        "X-RD-Token": config.RD_TOKEN,
     }
 
     enhanced_prompt = (
@@ -311,7 +311,7 @@ async def generate_boat(request: ImageRequest, _: str = Depends(verify_api_key))
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
-        "X-RD-Token": "rdpk-c9c6911ae1e01e3a986e25209740aa50",
+        "X-RD-Token": config.RD_TOKEN,
     }
 
     enhanced_prompt = (
@@ -364,7 +364,7 @@ async def generate_background(request: ImageRequest, _: str = Depends(verify_api
     url = "https://api.retrodiffusion.ai/v1/inferences"
 
     headers = {
-        "X-RD-Token": "rdpk-c9c6911ae1e01e3a986e25209740aa50",
+        "X-RD-Token": config.RD_TOKEN,
     }
 
     enhanced_prompt = llm.enhance_prompt(request.prompt)
