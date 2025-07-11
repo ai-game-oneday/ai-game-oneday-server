@@ -9,7 +9,8 @@ import logging
 import time
 from starlette.responses import Response
 import llm
-from remove_background import remove_background
+
+# from remove_background import remove_background
 import config
 
 
@@ -186,9 +187,9 @@ async def generate_image(request: ImageRequest, _: str = Depends(verify_api_key)
     }
 
     base64_image = await call_imaginaldiffusion_api(payload)
-    nobg_image = remove_background(base64_image)
+    # nobg_image = remove_background(base64_image)
 
-    return ImageResponse(base64_image=nobg_image)
+    return ImageResponse(base64_image=base64_image)
 
 
 @app.post("/generate-fish", response_model=ImageResponse)
@@ -230,9 +231,9 @@ async def generate_fish(request: ImageRequest, _: str = Depends(verify_api_key))
                 raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
 
             first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
+            # nobg_image = remove_background(first_image)
 
-            return ImageResponse(base64_image=nobg_image)
+            return ImageResponse(base64_image=first_image)
 
     except httpx.RequestError as e:
         print(f"Unexpected HTTPX error: {e}")
@@ -290,9 +291,9 @@ async def generate_human(request: ImageRequest, _: str = Depends(verify_api_key)
                 raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
 
             first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
+            # nobg_image = remove_background(first_image)
 
-            return ImageResponse(base64_image=nobg_image)
+            return ImageResponse(base64_image=first_image)
 
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
@@ -343,9 +344,9 @@ async def generate_boat(request: ImageRequest, _: str = Depends(verify_api_key))
                 raise HTTPException(status_code=500, detail="응답에 이미지가 없습니다")
 
             first_image = response_data["base64_images"][0]
-            nobg_image = remove_background(first_image)
+            # nobg_image = remove_background(first_image)
 
-            return ImageResponse(base64_image=nobg_image)
+            return ImageResponse(base64_image=first_image)
 
     except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"API 호출 실패: {str(e)}")
